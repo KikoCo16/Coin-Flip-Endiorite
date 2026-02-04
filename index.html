@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>🪙 Coinflip Endiorite</title>
+<style>
+*{box-sizing:border-box;}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#0f172a,#020617);font-family:system-ui,Arial,sans-serif;color:#f0f9ff;display:flex;justify-content:center;align-items:center;padding:20px;}
+.card{width:100%;max-width:400px;background:#0b1120;border-radius:16px;padding:24px;border:1px solid #1e3a8a;box-shadow:0 10px 40px rgba(0,0,0,0.8);}
+h1{text-align:center;margin:12px 0;color:#60a5fa;font-size:1.8rem;}
+.credit-box{text-align:center;font-size:24px;font-weight:bold;margin:15px 0;color:#3b82f6;text-shadow:0 0 10px rgba(59,130,246,0.4);}
+input, select, button{width:100%;padding:12px;margin:6px 0;border-radius:10px;border:none;font-size:16px;}
+button{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;font-weight:700;cursor:pointer;}
+button:active{transform:scale(0.98);}
+.msg{text-align:center;font-size:14px;min-height:20px;color:#7dd3fc;margin:10px 0;}
+.result{font-size:32px;text-align:center;margin:15px 0;}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>🪙 Coinflip</h1>
+<div class="credit-box">💰 <span id="credits">0</span> crédits</div>
+
+<select id="coinChoice">
+  <option value="pile">Pile</option>
+  <option value="face">Face</option>
+</select>
+
+<input id="betAmount" type="number" placeholder="Mise (max 200)">
+<button id="flipBtn">Lancer le Coinflip</button>
+
+<div class="result" id="resultDisplay">❓</div>
+<div class="msg" id="resultMsg"></div>
+<button id="backBtn">⬅ Retour</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js";
+
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyDAQALLN99kqiYY4UZz9wl2stedP5KQ5mA",
+  authDomain: "casino-b23c9.firebaseapp.com",
+  databaseURL: "https://casino-b23c9-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "casino-b23c9",
+  storageBucket: "casino-b23c9.appspot.com",
+  messagingSenderId: "139229793155",
+  appId: "1:139229793155:web:953b31b383a87bc3c504b6"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// Utilisateur
+const currentUser = localStorage.getItem("casinoUser");
+if(!currentUser){ alert("Connectez-vous !"); window.location.href="https://kikoco16.github.io/Casino-Endiorite/"; }
+
+// DOM
+const creditsEl = document.getElementById("credits");
+const coinChoice = document.getElementById("coinChoice");
+const betAmount = document.getElementById("betAmount");
+const flipBtn = document.getElementById("flipBtn");
+const resultDisplay = document.getElementById("resultDisplay");
+const resultMsg = document.getElementById("resultMsg");
+const backBtn = document.getElementById("backBtn");
+
+// Mise à jour crédits
+async function updateCredits(){
+  const snap = await get(ref(db,"users/"+currentUser));
+  creditsEl.textContent = snap.exists()?snap.val().credits:0;
+}
+
+// Lancer le coinflip
+flipBtn.onclick = async () => {
+  let bet = parseInt(betAmount.value);
+  if(!bet || bet <= 0){ resultMsg.textContent = "Mise invalide"; return; }
+  if(bet > 200) bet = 200; // max 200
+
+  const userRef = ref(db,"users/"+currentUser);
+  const bankRef = ref(db,"users/Banque Centrale");
+
+  const snap = await get(userRef);
+  const bankSnap = await get(bankRef);
+
+  if(!snap.exists()) return alert("Utilisateur inconnu");
+  if(bet > snap.val().credits){ resultMsg.textContent = "Pas assez de crédits"; return; }
+
+  const outcome = Math.random() < 0.5 ? "pile" : "face";
+  resultDisplay.textContent = outcome.toUpperCase();
+
+  const win = coinChoice.value === outcome;
+  const multiplier = 1.5;
+  const net = win ? Math.floor(bet*(multiplier-1)) : -bet;
+
+  // 🔹 Mise à jour crédits joueur
+  await update(userRef,{
+    credits: snap.val().credits + net, // ajoute ou enlève selon victoire ou défaite
+    balance: (snap.val().balance || 0) + (win ? net : 0),
+    password: snap.val().password
+});
+
+  // 🔹 Si perdu → envoyer la mise à la Banque Centrale
+  if(!win){
+    const bankCredits = bankSnap.exists() ? bankSnap.val().credits : 0;
+    const bankBalance = bankSnap.exists() ? (bankSnap.val().balance || 0) : 0;
+
+    await update(bankRef,{
+      credits: bankCredits + bet,
+      balance: bankBalance + bet
+    });
+  }
+
+  updateCredits();
+  resultMsg.textContent = win ? `Gagné ! x${multiplier} → +${net} crédits` : `Perdu 😢 → ${bet} crédits`;
+}
+
+backBtn.onclick = ()=>window.location.href="https://kikoco16.github.io/Casino-Endiorite/";
+
+updateCredits();
+</script>
+</body>
+</html>
